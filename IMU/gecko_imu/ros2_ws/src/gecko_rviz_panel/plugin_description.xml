@@ -1,0 +1,7 @@
+<library path="gecko_rviz_panel">
+  <class name="gecko_rviz_panel/GeckoPanel"
+         type="gecko_rviz_panel::GeckoPanel"
+         base_class_type="rviz_common::Panel">
+    <description>Joystick, lever and knobs that control the Gecko twin.</description>
+  </class>
+</library>

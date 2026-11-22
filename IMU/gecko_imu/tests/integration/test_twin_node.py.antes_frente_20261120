@@ -1,0 +1,183 @@
+"""Integration tests of the Gecko twin node. Gazebo is not required."""
+
+import math
+import subprocess
+import sys
+import time
+from pathlib import Path
+
+import pytest
+import rclpy
+from geometry_msgs.msg import PoseStamped
+from rclpy.qos import DurabilityPolicy, QoSProfile, ReliabilityPolicy
+from sensor_msgs.msg import Imu, JointState
+from std_msgs.msg import Bool, Float64, Float64MultiArray, Int8
+from tf2_msgs.msg import TFMessage
+
+SCRIPT = Path(__file__).resolve().parents[2] / 'scripts/gecko_twin_node.py'
+LATCHED = QoSProfile(depth=1, reliability=ReliabilityPolicy.RELIABLE,
+                     durability=DurabilityPolicy.TRANSIENT_LOCAL)
+WHEELS = ('Wheel_FL_Joint', 'Wheel_FR_Joint', 'Wheel_RL_Joint', 'Wheel_RR_Joint')
+
+
+class Harness:
+    def __init__(self):
+        self.node = rclpy.create_node('twin_node_test')
+        self.joints = None
+        self.base = None
+        self.node.create_subscription(JointState, '/joint_states', self._on_joints, 10)
+        self.node.create_subscription(TFMessage, '/tf', self._on_tf, 10)
+        self.drive = self.node.create_publisher(Int8, '/gecko/cmd/drive', 10)
+        self.servo = self.node.create_publisher(Float64, '/gecko/cmd/servo_angle', 10)
+        self.turbine_f = self.node.create_publisher(Float64, '/gecko/cmd/turbine_f', 10)
+        self.turbine_r = self.node.create_publisher(Float64, '/gecko/cmd/turbine_r', 10)
+        self.imu = self.node.create_publisher(Imu, '/imu/data', 10)
+        self.wall_pose = self.node.create_publisher(PoseStamped, '/gecko/wall/pose', LATCHED)
+        self.wall_active = self.node.create_publisher(Bool, '/gecko/wall/active', LATCHED)
+
+    def _on_joints(self, msg):
+        self.joints = msg
+
+    def _on_tf(self, msg):
+        for transform in msg.transforms:
+            if transform.child_frame_id == 'Base_link':
+                self.base = transform.transform
+
+    def spin(self, seconds, every=None):
+        end = time.monotonic() + seconds
+        while time.monotonic() < end:
+            if every is not None:
+                every()
+            rclpy.spin_once(self.node, timeout_sec=0.05)
+
+    def wait_ready(self, timeout=20.0):
+        end = time.monotonic() + timeout
+        while time.monotonic() < end:
+            rclpy.spin_once(self.node, timeout_sec=0.1)
+            if self.joints is not None and self.base is not None \
+                    and self.drive.get_subscription_count() > 0:
+                return
+        raise AssertionError('twin node did not start')
+
+    def velocity(self, joint):
+        return self.joints.velocity[self.joints.name.index(joint)]
+
+    def position(self, joint):
+        return self.joints.position[self.joints.name.index(joint)]
+
+    def publish_pitch(self, pitch):
+        msg = Imu()
+        msg.orientation.y = math.sin(pitch / 2.0)
+        msg.orientation.w = math.cos(pitch / 2.0)
+        self.imu.publish(msg)
+
+
+@pytest.fixture(scope='module')
+def ros():
+    rclpy.init()
+    yield
+    rclpy.shutdown()
+
+
+@pytest.fixture
+def twin(ros):
+    process = subprocess.Popen([sys.executable, str(SCRIPT)],
+                               stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    harness = Harness()
+    try:
+        harness.wait_ready()
+        yield harness
+    finally:
+        process.terminate()
+        process.wait(timeout=10)
+        harness.node.destroy_node()
+
+
+def test_works_without_imu(twin):
+    twin.spin(1.0)
+    assert twin.base.translation.z == pytest.approx(0.028419, abs=1e-6)
+    assert twin.base.rotation.w == pytest.approx(1.0)
+
+
+def test_forward_moves_base_and_wheels(twin):
+    twin.spin(2.0, lambda: twin.drive.publish(Int8(data=1)))
+    assert 0.2 <= twin.base.translation.x <= 0.4
+    assert [twin.velocity(j) for j in WHEELS] == [10.0] * 4
+
+
+def test_right_turns_in_place_clockwise(twin):
+    twin.spin(1.0, lambda: twin.drive.publish(Int8(data=3)))
+    r = twin.base.rotation
+    yaw = math.atan2(2 * (r.w * r.z + r.x * r.y), 1 - 2 * (r.y * r.y + r.z * r.z))
+    # About 1.16 rad/s for ~1 s; the exact time depends on start-up timing.
+    assert -1.5 <= yaw <= -0.6
+    assert (twin.base.translation.x, twin.base.translation.y) == pytest.approx((0, 0), abs=1e-9)
+    assert twin.velocity('Wheel_FL_Joint') == 10.0
+    assert twin.velocity('Wheel_FR_Joint') == -10.0
+
+
+def test_servo_moves_both_joints(twin):
+    twin.servo.publish(Float64(data=0.5))
+    twin.spin(0.5)
+    assert twin.position('Turbine_Servo_F_Joint') == pytest.approx(0.5)
+    assert twin.position('Turbine_Servo_R_Joint') == pytest.approx(0.5)
+
+
+def test_turbines_are_independent_and_hold(twin):
+    twin.turbine_f.publish(Float64(data=0.5))
+    twin.turbine_r.publish(Float64(data=-1.0))
+    twin.spin(3.0)
+    assert twin.velocity('Turbine_F_Joint') == pytest.approx(30.0)
+    assert twin.velocity('Turbine_R_Joint') == pytest.approx(-60.0)
+
+
+def test_watchdog_keeps_servo_and_turbines(twin):
+    twin.servo.publish(Float64(data=0.5))
+    twin.turbine_f.publish(Float64(data=0.5))
+    twin.spin(0.5, lambda: twin.drive.publish(Int8(data=1)))
+    assert twin.velocity('Wheel_FL_Joint') == 10.0
+    twin.spin(1.0)
+    assert [twin.velocity(j) for j in WHEELS] == [0.0] * 4
+    assert twin.position('Turbine_Servo_F_Joint') == pytest.approx(0.5)
+    assert twin.velocity('Turbine_F_Joint') == pytest.approx(30.0)
+
+
+def test_late_subscriber_gets_controls(twin):
+    twin.servo.publish(Float64(data=0.5))
+    twin.turbine_f.publish(Float64(data=0.5))
+    twin.turbine_r.publish(Float64(data=-1.0))
+    twin.spin(0.5)
+
+    received = []
+    twin.node.create_subscription(Float64MultiArray, '/gecko/state/controls',
+                                  lambda m: received.append(list(m.data)), LATCHED)
+    twin.spin(1.0)
+    assert received[-1] == pytest.approx([0.5, 0.5, -1.0])
+
+
+def test_wall_topics_enter_wall_mode(twin):
+    twin.spin(0.5, lambda: twin.publish_pitch(0.0))
+
+    pose = PoseStamped()
+    pose.header.frame_id = 'world'
+    pose.pose.position.x, pose.pose.position.z = 1.0, 1.0
+    pose.pose.orientation.w = 1.0
+    twin.wall_pose.publish(pose)
+    twin.wall_active.publish(Bool(data=True))
+
+    twin.spin(1.0, lambda: twin.publish_pitch(math.radians(-90.0)))
+    assert twin.base.translation.x == pytest.approx(0.95 - 0.028419, abs=1e-4)
+
+
+@pytest.mark.parametrize('bad', [math.nan, math.inf, 1e300])
+def test_invalid_wall_pose_is_ignored(twin, bad):
+    pose = PoseStamped()
+    pose.header.frame_id = 'world'
+    pose.pose.position.x, pose.pose.position.z = bad, 1.0
+    pose.pose.orientation.w = 1.0
+    twin.wall_pose.publish(pose)
+    twin.wall_active.publish(Bool(data=True))
+
+    twin.spin(1.0, lambda: twin.drive.publish(Int8(data=1)))
+    assert 0.05 <= twin.base.translation.x <= 0.25
+    assert twin.base.translation.z == pytest.approx(0.028419, abs=1e-6)

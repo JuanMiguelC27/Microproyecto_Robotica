@@ -1,0 +1,25 @@
+from pathlib import Path
+
+ROOT = Path(__file__).resolve().parents[2]
+NEEDLE = 'su' + 'mo'
+SKIP = {'build', 'install', 'log', '__pycache__', '.pytest_cache'}
+# The Raspberry's own folder keeps its old name; it is outside this project.
+RASPBERRY_FOLDER = '~/mini_' + NEEDLE + '_imu'
+# Same folder written as a systemd specifier in the service unit.
+RASPBERRY_FOLDER_UNIT = '%h/mini_' + NEEDLE + '_imu'
+
+
+def project_files():
+    for path in ROOT.rglob('*'):
+        if path.is_file() and not SKIP & set(path.relative_to(ROOT).parts):
+            yield path
+
+
+def test_no_file_uses_old_name():
+    assert [p for p in project_files() if NEEDLE in p.name.lower()] == []
+
+
+def test_no_content_uses_old_name():
+    hits = [p for p in project_files()
+            if NEEDLE in p.read_text(errors='ignore').replace(RASPBERRY_FOLDER, '').replace(RASPBERRY_FOLDER_UNIT, '').lower()]
+    assert hits == []

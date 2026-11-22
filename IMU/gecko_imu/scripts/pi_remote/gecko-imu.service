@@ -1,0 +1,18 @@
+[Unit]
+Description=Emisor IMU BNO085 de Gecko
+# Sin límite de reintentos: si el hotspot aún no está listo, el emisor se reintenta.
+StartLimitIntervalSec=0
+
+[Service]
+Type=simple
+ExecStart=%h/mini_sumo_imu/.venv/bin/python -u %h/mini_sumo_imu/scripts/bno085_sender.py --host 10.42.0.1 --port 5005 --rate 30
+# Ctrl+C (SIGINT) libera el I2C; start_sender.sh y stop_sender.sh paran este
+# servicio antes de lanzar o detener el emisor, así que una salida por SIGINT no es fallo.
+KillSignal=SIGINT
+TimeoutStopSec=8
+SuccessExitStatus=130 SIGINT
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=default.target

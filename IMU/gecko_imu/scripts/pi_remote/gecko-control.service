@@ -1,0 +1,18 @@
+[Unit]
+Description=Selección del modo de control de Gecko al arrancar
+Wants=gecko-serial.service
+After=gecko-serial.service
+
+[Service]
+Type=oneshot
+# Espera (máx. 60 s) a que el puente serial esté activo y su FIFO exista.
+ExecStartPre=/bin/bash -c 'for i in $$(seq 1 60); do systemctl --user is-active --quiet gecko-serial.service && [ -p "%h/gecko_serial/cmd.fifo" ] && exit 0; sleep 1; done; exit 1'
+ExecStart=/usr/bin/python3 %h/gecko_tools/gecko_mode8_boot.py
+RemainAfterExit=yes
+# Ventana de 180 s desde el arranque + espera del puente + margen. Sin Restart: un
+# único intento por arranque (el modo 8 nunca debe activarse horas después).
+TimeoutStartSec=260
+Restart=no
+
+[Install]
+WantedBy=default.target

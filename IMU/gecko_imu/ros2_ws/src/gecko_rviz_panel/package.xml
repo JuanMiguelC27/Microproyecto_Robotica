@@ -1,0 +1,22 @@
+<?xml version="1.0"?>
+<package format="3">
+  <name>gecko_rviz_panel</name>
+  <version>1.0.0</version>
+  <description>RViz panel that drives the motors of the Gecko digital twin.</description>
+  <maintainer email="gecko@example.com">Gecko</maintainer>
+  <license>BSD</license>
+
+  <buildtool_depend>ament_cmake</buildtool_depend>
+
+  <depend>pluginlib</depend>
+  <depend>rclcpp</depend>
+  <depend>rviz_common</depend>
+  <depend>std_msgs</depend>
+  <depend>qtbase5-dev</depend>
+
+  <test_depend>ament_cmake_gtest</test_depend>
+
+  <export>
+    <build_type>ament_cmake</build_type>
+  </export>
+</package>

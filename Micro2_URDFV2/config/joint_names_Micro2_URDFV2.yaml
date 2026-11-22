@@ -1,0 +1,1 @@
+controller_joint_names: ['', 'Turbine_Servo_F_Joint', 'Turbine_F_Joint', 'Turbine_Servo_R_Joint', 'Turbine_R_Joint', 'Wheel_FL_Joint', 'Wheel_FR_Joint', 'Wheel_RR_Joint', 'Wheel_RL_Joint', ]

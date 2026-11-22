@@ -1,0 +1,10 @@
+[Unit]
+Description=Puente serial de la ESP32 de Gecko
+
+[Service]
+ExecStart=/usr/bin/python3 %h/gecko_tools/esp32_bridge.py
+Restart=on-failure
+RestartSec=2
+
+[Install]
+WantedBy=default.target
