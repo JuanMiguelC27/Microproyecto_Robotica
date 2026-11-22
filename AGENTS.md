@@ -2,7 +2,7 @@
 
 Responde siempre en español. Fecha de este documento: 2026-11-20.
 
-Gecko es el vehículo de inspección del Microproyecto de Robótica (antes "mini sumo"). Este archivo da a Codex el mismo contexto y las mismas capacidades que tenía la sesión de Claude Code: levantar el hotspot, entrar a la Raspberry por SSH y manejar la ESP32 por el puerto serial.
+Gecko es el vehículo de inspección del Microproyecto de Robótica. Este archivo da a Codex el mismo contexto y las mismas capacidades que tenía la sesión de Claude Code: levantar el hotspot, entrar a la Raspberry por SSH y manejar la ESP32 por el puerto serial.
 
 ---
 
