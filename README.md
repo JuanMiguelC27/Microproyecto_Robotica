@@ -1,14 +1,14 @@
-# Gecko: contexto del proyecto para Codex
+# Gecko Buddy - Programación asistida
 
-Responde siempre en español. Fecha de este documento: 2026-11-20.
+Fecha de este documento: 2026-11-20.
 
-Gecko es el vehículo de inspección del Microproyecto de Robótica (antes "mini sumo"). Este archivo da a Codex el mismo contexto y las mismas capacidades que tenía la sesión de Claude Code: levantar el hotspot, entrar a la Raspberry por SSH y manejar la ESP32 por el puerto serial.
+Gecko es el vehículo de inspección del Microproyecto de Robótica. Este archivo da a Codex el mismo contexto y las mismas capacidades que tenía la sesión de Claude Code: levantar el hotspot, entrar a la Raspberry por SSH y manejar la ESP32 por el puerto serial.
 
 ---
 
 ## 1. Forma de trabajo con agentes
 
-El agente principal es el **líder del proyecto**. Planifica, reparte el trabajo, revisa lo que entregan los subagentes y verifica los resultados antes de dar algo por terminado. Delega en dos subagentes:
+Para facilitar las tareas de programación y organización del proyecto se hizo uso de Claude Code junto con el uso de agentes, el agente principal es el **líder del proyecto**. Planifica, reparte el trabajo, revisa lo que entregan los subagentes y verifica los resultados antes de dar algo por terminado. Delega en dos subagentes:
 
 | Rol | Modelo en Codex | Equivalente en Claude | Tarea |
 |---|---|---|---|
